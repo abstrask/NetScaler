@@ -1,0 +1,6 @@
+Domain;RequestUrl;RedirectUrl
+some.domain.tld;/;/new/path/
+some.domain.tld;/some-old-path/*;/brand/new/path/
+otherdomain.tld;/another-old-path/;/brand/new/path/
+otherdomain.tld;/another-old-path/sub-path/;/brand/new/path/
+otherdomain.tld;/another-old-path/sub-path/old-page;/brand/new/path/new-page
