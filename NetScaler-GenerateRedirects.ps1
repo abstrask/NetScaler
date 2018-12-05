@@ -1,15 +1,53 @@
 <#
 
-- Save in "CSV UTF-8" format, semicolon separated
-- No blank lines
-- Headers: "Domain", "RequestUrl", "RedirectUrl"
-- RequestURLs are automatically URL encoded - otherwise the NetScaler rules may not work
+.SYNOPSIS
+    Generates a NetScaler batch configuration file, for configuring redirects based on a list of redirect rules.
 
-https://docs.citrix.com/en-us/netscaler/11/appexpert/policies-and-expressions/ns-regex-wrapper-con/ns-regex-basic-charactrstcs-con.html
-https://docs.citrix.com/en-us/netscaler/11/appexpert/policies-and-expressions/ns-regex-wrapper-con/ns-regex-operations-con.html
-https://docs.citrix.com/zh-cn/netscaler/11/appexpert/policies-and-expressions/ns-pi-Adv-exp-eval-txt-wrapper-con/ns-pi-basic-operations-con.html
+    Request URLs containing wilcards ("*") are considered fallback redirect rules, and will be the last rules to be added
+   
+.PARAMETER CsvPath
+    The path to the CSV file specifying the redirect rules.
+    - Headers must be: "Domain", "RequestUrl", "RedirectUrl"
+    - Fields must be semicolon-separated (or manually change character for the 'Import-Csv' command)
+    - The file format must be in UTF8 (Excel: Save as "CSV UTF-8"
+    - No blank lines (could probably easily be ignored in a future version)
+    - RequestUrls are automatically URL encoded - otherwise the NetScaler rules may not work
 
+.PARAMETER RedirUrlPrefix
+    The text string to prefix the redirected URLs with (before "RedirectUrl"), e.g. "https://www.newdomain.tld" or "http://www.anotherdomain.tld".
+    
+.PARAMETER HttpVserver
+
+.PARAMETER HttpsVserver
+
+.PARAMETER SpecificRuleNumberBegin
+
+.PARAMETER FallbackRuleNumberBegin
+
+.PARAMETER RuleNumberIncrement
+
+.PARAMETER PriorityBegin
+
+.PARAMETER PriorityIncrement
+   
+.PARAMETER OutputPath
+    Optional. The path where batch files are output to. Defaults to current working directory.
+
+.EXAMPLE
+    .\NetScaler-GenerateRedirects.ps1 -CsvPath .\Redirects_Example.csv -RedirUrlPrefix "https://www.newdomain.tld/" -HttpVserver CSW_VIP_HTTP-Redirects -HttpsVserver CSW_VIP_HTTPS-Redirects
+    "HTTP.REQ.URL.SET_TEXT_MODE(IGNORECASE).REGEX_MATCH(re#^/another-old-path/?$#)" ==> https://www.newdomain.tld/brand/new/path/
+    "HTTP.REQ.URL.SET_TEXT_MODE(IGNORECASE).REGEX_MATCH(re#^/another-old-path/sub-path/?$#)" ==> https://www.newdomain.tld/brand/new/path/
+    "HTTP.REQ.URL.SET_TEXT_MODE(IGNORECASE).REGEX_MATCH(re#^/another-old-path/sub-path/old-page/?$#)" ==> https://www.newdomain.tld/brand/new/path/new-page
+    "HTTP.REQ.URL.EQ(\"/\")" ==> https://www.newdomain.tld/new/path/
+    "HTTP.REQ.URL.SET_TEXT_MODE(IGNORECASE).STARTSWITH(\"/some-old-path/\")" ==> https://www.newdomain.tld/brand/new/path/
+    NetScaler batch configuration output: C:\code\private\NetScaler-GenerateRedirects\redirects_20181205-125626.txt
+
+.EXAMPLE
+    .\NetScaler-GenerateRedirects.ps1 -CsvPath .\Redirects_Example -RedirUrlPrefix "https://www.newdomain.tld/" -HttpVserver CSW_VIP_HTTP-Redirects -HttpsVserver CSW_VIP_HTTPS-Redirects -SpecificRuleNumberBegin 2000 -FallbackRuleNumberBegin 8000 
+    
 #>
+
+
 
 Param (
 
@@ -17,19 +55,20 @@ Param (
     [ValidateNotNullOrEmpty()]
     [string]$CsvPath,
 
+    [Parameter(Mandatory=$True)]
+    [ValidateNotNullOrEmpty()]
+    [string]$RedirUrlPrefix,
+
     [ValidateNotNullOrEmpty()]
     [string]$OutputPath = $PWD,
 
-    [Parameter(Mandatory=$False)]
+    [Parameter(Mandatory=$True)]
     [ValidateNotNullOrEmpty()]
-    [string]$HttpVserver = $global:HttpVserver,
+    [string]$HttpVserver,
 
-    [Parameter(Mandatory=$False)]
+    [Parameter(Mandatory=$True)]
     [ValidateNotNullOrEmpty()]
-    [string]$HttpsVserver = $global:HttpsVserver,
-
-    [ValidateNotNullOrEmpty()]
-    [string]$global:RedirUrlPrefix = 'https://www.newdomain.tld/',
+    [string]$HttpsVserver,
 
     [int]$SpecificRuleNumberBegin = 1000,
 
@@ -44,6 +83,8 @@ Param (
 )
 
 
+Add-Type -AssemblyName System.Web
+
 
 Function New-RedirectConfig {
 
@@ -52,6 +93,10 @@ Function New-RedirectConfig {
         [Parameter(Mandatory=$True)]
         [ValidateNotNullOrEmpty()]
         [string]$Domain,
+
+        [Parameter(Mandatory=$True)]
+        [ValidateNotNullOrEmpty()]
+        [string]$RedirUrlPrefix,
 
         [Parameter(Mandatory=$True)]
         [ValidateNotNullOrEmpty()]
@@ -71,11 +116,11 @@ Function New-RedirectConfig {
 
         [Parameter(Mandatory=$False)]
         [ValidateNotNullOrEmpty()]
-        [string]$HttpVserver = $global:HttpVserver,
+        [string]$HttpVserver = $HttpVserver,
 
         [Parameter(Mandatory=$False)]
         [ValidateNotNullOrEmpty()]
-        [string]$HttpsVserver = $global:HttpsVserver
+        [string]$HttpsVserver = $HttpsVserver
 
     )
 
@@ -85,7 +130,7 @@ Function New-RedirectConfig {
     $DomainCriteria = "(HTTP.REQ.HOSTNAME.SET_TEXT_MODE(IGNORECASE).EQ(\""$DomainFixup\""))"
 
     $RedirectUrlFixup = $RedirectUrl.TrimStart('/')
-    $FullRedirectUrl = "$($global:RedirUrlPrefix.TrimEnd('/'))/$RedirectUrlFixup"
+    $FullRedirectUrl = "$($RedirUrlPrefix.TrimEnd('/'))/$RedirectUrlFixup"
 
     $RequestUrlEncoded = [System.Web.HttpUtility]::UrlEncode($RequestUrl).Replace('%2f','/')
 
@@ -114,16 +159,10 @@ bind cs vserver $HttpsVserver -policyName RespPol_$($RuleNumber.ToString("0000")
 "@
 
     $RequestUrlCriteria | ForEach {
-        Write-Verbose """$_"" ==> $FullRedirectUrl" -Verbose
+        # Write-Verbose """$_"" ==> $FullRedirectUrl" -Verbose
+        Write-Host """$_"" ==> $FullRedirectUrl" -ForegroundColor DarkGray
     }
 
-}
-
-
-If (Test-Path -Path $OutputFile) {
-    $OutputTofile = $false
-} Else {
-    $OutputTofile = $true
 }
 
 
@@ -133,10 +172,10 @@ Remove-Variable Rules -ErrorAction SilentlyContinue
 
 # Specific redirects (separate rules for each redirect)
 $RuleNumber = $SpecificRuleNumberBegin
-$Priority = 100
+$Priority = $PriorityBegin
 $RedirectCsv | Where-Object {$_.RequestUrl -notmatch '\*'} | ForEach {
 
-    $Rules += New-RedirectConfig -Domain $_.Domain -RequestUrl $_.RequestUrl -RedirectUrl $_.RedirectUrl -RuleNumber $RuleNumber -Priority $Priority
+    $Rules += New-RedirectConfig -Domain $_.Domain -RedirUrlPrefix $RedirUrlPrefix -RequestUrl $_.RequestUrl -RedirectUrl $_.RedirectUrl -RuleNumber $RuleNumber -Priority $Priority
 
     $RuleNumber = $RuleNumber + $RuleNumberIncrement
     $Priority = $Priority + $PriorityIncrement
@@ -148,24 +187,51 @@ $RedirectCsv | Where-Object {$_.RequestUrl -notmatch '\*'} | ForEach {
 $RuleNumber = $FallbackRuleNumberBegin
 $RedirectCsv | Where-Object {$_.RequestUrl -match '\*'} | ForEach {
 
-    $Rules += New-RedirectConfig -Domain $_.Domain -RequestUrl $_.RequestUrl -RedirectUrl $_.RedirectUrl -RuleNumber $RuleNumber -Priority $Priority
+    $Rules += New-RedirectConfig -Domain $_.Domain -RedirUrlPrefix $RedirUrlPrefix -RequestUrl $_.RequestUrl -RedirectUrl $_.RedirectUrl -RuleNumber $RuleNumber -Priority $Priority
 
     $RuleNumber = $RuleNumber + $RuleNumberIncrement
     $Priority = $Priority + $PriorityIncrement
 
 }
 
-$TimeStamp = Get-Date -Format "yyyyMMdd-HHmmss"
-$OutputFile = "$OutputPath\redirects_$TimeStamp.txt"
-$WriterAppend = $false
-$WriterEncoding = New-Object System.Text.UTF8Encoding $False
-$writer = New-Object System.IO.StreamWriter $OutputFile, $WriterAppend, $WriterEncoding
-$writer.NewLine = "`n"
 
-$Rules -split "`r`n" | ForEach {
-    If ($_.Length -gt 0) {
-        $writer.WriteLine($_)
+# Output redirects to batch file (UTF8, LF EOL)
+If (Test-Path -Path $OutputPath) {
+
+    $TimeStamp = Get-Date -Format "yyyyMMdd-HHmmss"
+
+    # Redirects
+    $OutputRedirects = "$OutputPath\$($TimeStamp)_redirects.txt"
+    $WriterAppend = $false
+    $WriterEncoding = New-Object System.Text.UTF8Encoding $False
+    $writer = New-Object System.IO.StreamWriter $OutputRedirects, $WriterAppend, $WriterEncoding
+    $writer.NewLine = "`n"
+
+    $Rules -split "`r`n" | ForEach {
+        If ($_.Length -gt 0) {
+            $writer.WriteLine($_)
+        }
     }
-}
 
-$writer.Dispose()
+    $writer.Dispose()
+
+    # Unbind - TBD
+    # Syntax: unbind cs vserver CSW_VIP_HTTPS-Redirects -policyName RespPol_9000 -type REQUEST -priority 140
+    $OutputUnbind = "$OutputPath\$($TimeStamp)_unbind.txt"
+
+    # Rollback - TBD
+    # Syntax?
+    $OutputRollback = "$OutputPath\$($TimeStamp)_rollback.txt"
+
+    Write-Host "NetScaler batch configuration outputs ($($RedirectCsv.Count) rules):" -ForegroundColor White
+    Write-Host "  Redirects:     $OutputRedirects" -ForegroundColor Green
+    <#
+    Write-Host "  Unbind:        $OutputUnbind" -ForegroundColor Yellow
+    Write-Host "  Rollback:      $OutputRollback" -ForegroundColor Red
+    #>
+
+} Else {
+
+    Throw "Output path ""$OutputPath"" not found. No file generated."
+
+}
