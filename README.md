@@ -14,7 +14,7 @@ Requirements:
 
 - Headers must be: "Domain", "RequestUrl", "RedirectUrl"
 - Fields must be semicolon-separated (the `Import-Csv` command)
-- The file format must be in UTF8 (Excel: Save as "CSV UTF-8"
+- The file format must be in UTF8 (Excel: Save as "CSV UTF-8")
 - No blank lines (could probably easily be ignored in a future version)
 - RequestUrls are automatically URL encoded - otherwise the NetScaler rules may not work
 

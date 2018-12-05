@@ -6,29 +6,36 @@
     Request URLs containing wilcards ("*") are considered fallback redirect rules, and will be the last rules to be added
    
 .PARAMETER CsvPath
-    The path to the CSV file specifying the redirect rules.
+    Required. The path to the CSV file specifying the redirect rules.
     - Headers must be: "Domain", "RequestUrl", "RedirectUrl"
     - Fields must be semicolon-separated (or manually change character for the 'Import-Csv' command)
-    - The file format must be in UTF8 (Excel: Save as "CSV UTF-8"
+    - The file format must be in UTF8 (Excel: Save as "CSV UTF-8")
     - No blank lines (could probably easily be ignored in a future version)
     - RequestUrls are automatically URL encoded - otherwise the NetScaler rules may not work
 
 .PARAMETER RedirUrlPrefix
-    The text string to prefix the redirected URLs with (before "RedirectUrl"), e.g. "https://www.newdomain.tld" or "http://www.anotherdomain.tld".
+    Required. The text string to prefix the redirected URLs with (before "RedirectUrl"), e.g. "https://www.newdomain.tld" or "http://www.anotherdomain.tld".
     
 .PARAMETER HttpVserver
+    Required. The name of the content switch virtual server for HTTP requests
 
 .PARAMETER HttpsVserver
+    Required. The name of the content switch virtual server for HTTPS requests
 
 .PARAMETER SpecificRuleNumberBegin
+    Optional. The starting number for naming the specific (not containing wildcards) responder actions and policies, e.g. RespAct_1000. Defaults to 1000.
 
 .PARAMETER FallbackRuleNumberBegin
+    Optional. The starting number for naming the fallback (wildcard) responder actions and policies, e.g. RespPol_9000. Defaults to 9000.
 
 .PARAMETER RuleNumberIncrement
+    Optional. The number to increment by for each rule name, e.g. RespPol_1000, RespPol_1010. Defaults to 1.
 
 .PARAMETER PriorityBegin
+    Optional. The starting priority for the policy bindings. Defaults to 100, to leave room for higher priority bindings.
 
 .PARAMETER PriorityIncrement
+    Optional. The number to increment the priority of each policy binding by. Defaults to 10, to leave room for other bindings inbetween.
    
 .PARAMETER OutputPath
     Optional. The path where batch files are output to. Defaults to current working directory.
