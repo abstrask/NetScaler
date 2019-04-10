@@ -153,8 +153,12 @@ Function New-RedirectConfig {
     }
     Else {
 
-        # Fixup request URL - remove explicit leading and trailing slashes, explicitly prefix with a slash
+        # Fixup request URL - remove explicit leading and trailing slashes, explicitly prefix with a slash, thow-away query (after '?')
         $RequestUrlFixup = "/$($RequestUrlEncoded.ToLower().Trim('/'))"
+
+        If ($RequestUrlFixup.Contains('?')) {
+            $RequestUrlFixup = $RequestUrlFixup.Substring(0, $RequestUrlFixup.IndexOf('?'))
+        }
 
         If ($RequestUrlFixup -eq '/') {
 
