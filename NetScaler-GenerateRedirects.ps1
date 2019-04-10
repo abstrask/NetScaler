@@ -98,35 +98,35 @@ Function New-RedirectConfig {
 
     Param (
 
-        [Parameter(Mandatory=$True)]
+        [Parameter(Mandatory = $True)]
         [ValidateNotNullOrEmpty()]
         [string]$Domain,
 
-        [Parameter(Mandatory=$True)]
+        [Parameter(Mandatory = $True)]
         [ValidateNotNullOrEmpty()]
         [string]$RedirUrlPrefix,
 
-        [Parameter(Mandatory=$True)]
+        [Parameter(Mandatory = $True)]
         [ValidateNotNullOrEmpty()]
         [string]$RequestUrl,
 
-        [Parameter(Mandatory=$True)]
+        [Parameter(Mandatory = $True)]
         [ValidateNotNullOrEmpty()]
         [string]$RedirectUrl,
 
-        [Parameter(Mandatory=$True)]
+        [Parameter(Mandatory = $True)]
         [ValidateNotNullOrEmpty()]
         [int]$RuleNumber,
 
-        [Parameter(Mandatory=$True)]
+        [Parameter(Mandatory = $True)]
         [ValidateNotNullOrEmpty()]
         [int]$Priority,
 
-        [Parameter(Mandatory=$False)]
+        [Parameter(Mandatory = $False)]
         [ValidateNotNullOrEmpty()]
         [string]$HttpVserver = $HttpVserver,
 
-        [Parameter(Mandatory=$False)]
+        [Parameter(Mandatory = $False)]
         [ValidateNotNullOrEmpty()]
         [string]$HttpsVserver = $HttpsVserver
 
@@ -137,28 +137,56 @@ Function New-RedirectConfig {
     $DomainFixup = $Domain
     $DomainCriteria = "(HTTP.REQ.HOSTNAME.SET_TEXT_MODE(IGNORECASE).EQ(\""$DomainFixup\""))"
 
-    $RedirectUrlFixup = $RedirectUrl.TrimStart('/')
-    $FullRedirectUrl = "$($RedirUrlPrefix.TrimEnd('/'))/$RedirectUrlFixup"
 
-    $RequestUrlEncoded = [System.Web.HttpUtility]::UrlEncode($RequestUrl).Replace('%2f','/')
+    # --------------------------------------------------
+    # Process request URL
+    # --------------------------------------------------
 
-    # Build strings for config
+    $RequestUrlEncoded = [System.Web.HttpUtility]::UrlEncode($RequestUrl).Replace('%2f', '/').Replace('%3f', '?')
 
-    If ($RequestUrl -match "\*") {
+    If ($RequestUrl -match "\*$") {
+
+        # Request URL ends with a wildcard (*), so this will be a fall-back rule. Specfic rules will take precedence
         $RequestUrlFixup = "/$($RequestUrlEncoded.ToLower().TrimStart('/').TrimEnd('*'))"
         $RequestUrlCriteria = "HTTP.REQ.URL.SET_TEXT_MODE(IGNORECASE).STARTSWITH(\""$RequestUrlFixup\"")"
-    } Else {
+
+    }
+    Else {
+
+        # Fixup request URL - remove explicit leading and trailing slashes, explicitly prefix with a slash
         $RequestUrlFixup = "/$($RequestUrlEncoded.ToLower().Trim('/'))"
+
         If ($RequestUrlFixup -eq '/') {
-            $RequestUrlCriteria = "HTTP.REQ.URL.EQ(\""$RequestUrlFixup\"")"
-        } Else {
-            $RequestUrlCriteria = "HTTP.REQ.URL.SET_TEXT_MODE(IGNORECASE).REGEX_MATCH(re#^$RequestUrlFixup/?$#)"
+
+            # Requesting root of site (/)
+            $RequestUrlCriteria = "HTTP.REQ.URL.EQ(\""/\"")"
+
+        }
+        Else {
+
+            # Match requests for paths with or without trailing slash
+            $RequestUrlCriteria = "HTTP.REQ.URL.PATH.SET_TEXT_MODE(IGNORECASE).REGEX_MATCH(re#^$($RequestUrlFixup)/?$#)"
+
         }
     }
 
     $ResponderPolicyRequest = @($DomainCriteria, $RequestUrlCriteria) -join ' && '
 
-@"
+
+    # --------------------------------------------------
+    # Process redirect URL
+    # --------------------------------------------------
+
+    $RedirectUrlFixup = $RedirectUrl.TrimStart('/')
+
+    $FullRedirectUrl = "$($RedirUrlPrefix.TrimEnd('/'))/$($RedirectUrlFixup)? + HTTP.REQ.URL.QUERY.HTTP_URL_SAFE"
+
+
+    # --------------------------------------------------
+    # Output NetScaler config lines
+    # --------------------------------------------------
+
+    @"
 add responder action RespAct_$($RuleNumber.ToString("0000")) redirect "\"$FullRedirectUrl\"" -responseStatusCode 301
 add responder policy RespPol_$($RuleNumber.ToString("0000")) "$ResponderPolicyRequest" RespAct_$($RuleNumber.ToString("0000"))
 bind cs vserver $HttpVserver -policyName RespPol_$($RuleNumber.ToString("0000")) -priority $Priority -gotoPriorityExpression END -type REQUEST
@@ -166,7 +194,7 @@ bind cs vserver $HttpsVserver -policyName RespPol_$($RuleNumber.ToString("0000")
 
 "@
 
-    $RequestUrlCriteria | ForEach {
+    $RequestUrlCriteria | ForEach-Object {
         # Write-Verbose """$_"" ==> $FullRedirectUrl" -Verbose
         Write-Host """$_"" ==> $FullRedirectUrl" -ForegroundColor DarkGray
     }
@@ -293,6 +321,14 @@ If (Test-Path -Path $OutputPath) {
 
 
     # --------------------------------------------------
+    # Duplicate input file
+    # --------------------------------------------------
+    
+    $OutputInput = "$OutputPath\$($TimeStamp)_input.csv"
+    Copy-Item -Path $CsvPath -Destination $OutputInput
+
+
+    # --------------------------------------------------
     # Redirects
     # --------------------------------------------------
     
@@ -321,7 +357,8 @@ If (Test-Path -Path $OutputPath) {
     # Print result
     # --------------------------------------------------
 
-    Write-Host "NetScaler batch configuration outputs ($($RedirectCsv.Count) rules):" -ForegroundColor White
+    Write-Host "NetScaler batch configuration ($($RedirectCsv.Count) rules):" -ForegroundColor White
+    Write-Host "  Input:         $OutputInput" -ForegroundColor Cyan
     Write-Host "  Redirects:     $OutputRedirects" -ForegroundColor Green
     Write-Host "  Unbind:        $OutputUnbind" -ForegroundColor Yellow
     Write-Host "  Rollback:      $OutputRollback" -ForegroundColor Red
