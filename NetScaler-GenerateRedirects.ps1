@@ -232,8 +232,8 @@ Function New-RollbackConfig {
 
 
 @"
-unbind cs vserver $HttpVserver -policyName RespPol_$($RuleNumber.ToString("0000")) -priority $Priority -type REQUEST
-unbind cs vserver $HttpsVserver -policyName RespPol_$($RuleNumber.ToString("0000")) -priority $Priority -type REQUEST
+unbind cs vserver $HttpVserver -policyName RespPol_$($RuleNumber.ToString("0000"))
+unbind cs vserver $HttpsVserver -policyName RespPol_$($RuleNumber.ToString("0000"))
 
 "@
 
