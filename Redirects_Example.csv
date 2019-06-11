@@ -3,6 +3,7 @@ some.domain.tld;/;/new/path/
 some.domain.tld;/campaign-page.aspx;/newcampaign
 some.domain.tld;/other-campaign/;/other-campaign
 some.domain.tld;/shold-not-contain?query/;/catch-query
+some.domain.tld;/with-trailing-space ;/trim/
 some.domain.tld;/some-old-path/*;/brand/new/path/
 otherdomain.tld;/another-old-path/;/brand/new/path/
 otherdomain.tld;/another-old-path/sub-path/;/brand/new/path/

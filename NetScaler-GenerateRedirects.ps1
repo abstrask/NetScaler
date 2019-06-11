@@ -294,7 +294,7 @@ $RuleNumber = $SpecificRuleNumberBegin
 $Priority = $PriorityBegin
 $RedirectCsv | Where-Object {$_.RequestUrl -notmatch '\*'} | ForEach {
 
-    $RedirectCmd += New-RedirectConfig -Domain $_.Domain -RedirUrlPrefix $RedirUrlPrefix -RequestUrl $_.RequestUrl -RedirectUrl $_.RedirectUrl -RuleNumber $RuleNumber -Priority $Priority
+    $RedirectCmd += New-RedirectConfig -Domain $_.Domain.ToString().Trim() -RedirUrlPrefix $RedirUrlPrefix.Trim() -RequestUrl $_.RequestUrl.ToString().Trim() -RedirectUrl $_.RedirectUrl.ToString().Trim() -RuleNumber $RuleNumber -Priority $Priority
     $UnbindCmd += New-RollbackConfig -RuleNumber $RuleNumber -Priority $Priority -UnbindOnly
     $RollBackCmd += New-RollbackConfig -RuleNumber $RuleNumber -Priority $Priority
 
@@ -308,7 +308,7 @@ $RedirectCsv | Where-Object {$_.RequestUrl -notmatch '\*'} | ForEach {
 $RuleNumber = $FallbackRuleNumberBegin
 $RedirectCsv | Where-Object {$_.RequestUrl -match '\*'} | ForEach {
 
-    $RedirectCmd += New-RedirectConfig -Domain $_.Domain -RedirUrlPrefix $RedirUrlPrefix -RequestUrl $_.RequestUrl -RedirectUrl $_.RedirectUrl -RuleNumber $RuleNumber -Priority $Priority
+    $RedirectCmd += New-RedirectConfig -Domain $_.Domain.ToString().Trim() -RedirUrlPrefix $RedirUrlPrefix.Trim() -RequestUrl $_.RequestUrl.ToString().Trim() -RedirectUrl $_.RedirectUrl.ToString().Trim() -RuleNumber $RuleNumber -Priority $Priority
     $UnbindCmd += New-RollbackConfig -RuleNumber $RuleNumber -Priority $Priority -UnbindOnly
     $RollBackCmd += New-RollbackConfig -RuleNumber $RuleNumber -Priority $Priority
 
